@@ -2,7 +2,8 @@ import streamlit as st
 import requests
 import time
 import os
-from datetime import datetime
+# 💡 [수정 1] 시간을 더하고 뺄 수 있는 timedelta 도구를 추가했습니다.
+from datetime import datetime, timedelta
 
 WEBAPP_URL = "https://script.google.com/macros/s/AKfycbymDytZUmijx0gZhQBZpQU15Rf4V4YAA9o-hWTrVACsQyD_xgX_iYJ0nLm4Tgj592wy/exec"
 CACHE_FILE = "last_location.txt" 
@@ -34,9 +35,10 @@ def draw_ui(stand_data, sit_data):
     stand_display = LOCATION_MAP.get(stand_raw, stand_raw)
     sit_display = LOCATION_MAP.get(sit_raw, sit_raw)
 
-    now = datetime.now()
+    # 💡 [수정 2] 미국에 있는 서버 시간(UTC)에 9시간을 더해서 완벽한 한국 시간(KST)으로 만듭니다!
+    now = datetime.utcnow() + timedelta(hours=9)
 
-    # 💡 [수정됨] 구글의 복잡한 시간을 예쁜 형식(YYYY-MM-DD)으로 바꾸는 기능이 추가되었습니다!
+    # 구글의 복잡한 시간을 예쁜 형식(YYYY-MM-DD)으로 바꾸는 기능
     def check_status(time_str, display_loc):
         try:
             # 1. " GMT" 글자를 기준으로 앞부분(알맹이 시간)만 잘라냅니다.
@@ -51,7 +53,7 @@ def draw_ui(stand_data, sit_data):
             # 4. 현재 시간과 비교 (120초 이상 차이나면 전원 꺼짐으로 판단)
             diff = (now - dt).total_seconds()
             
-            if diff > 120:  
+            if diff > 60:  
                 return f"# 🔴 **{display_loc}**\n### 🔌 통신 끊김 (전원 꺼짐)\n> ⚠️ 마지막 확인: `{pretty_time}`"
             else:
                 return f"# 🟢 **{display_loc}**\n> 🕒 실시간 갱신 중: `{pretty_time}`"
