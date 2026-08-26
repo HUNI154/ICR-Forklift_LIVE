@@ -34,6 +34,7 @@ def update_history(history_list, new_val):
             history_list.pop(0)
     return history_list
 
+# 💡 화면 깜빡임(블러) 방지 도화지
 placeholder = st.empty()
 saved_raw_data = "대기중,대기중,-|대기중,대기중,-" 
 
@@ -51,7 +52,6 @@ def draw_ui(stand_data, sit_data):
     st.session_state.stand_rssi_history = update_history(st.session_state.stand_rssi_history, stand_rssi)
     st.session_state.sit_rssi_history = update_history(st.session_state.sit_rssi_history, sit_rssi)
 
-    # 💡 [핵심 UX 개선] 최신 전파 값을 맨 앞으로 빼서 굵게 강조!
     def format_trend(history):
         if not history:
             return "측정 대기"
@@ -65,7 +65,6 @@ def draw_ui(stand_data, sit_data):
     stand_trend = format_trend(st.session_state.stand_rssi_history)
     sit_trend = format_trend(st.session_state.sit_rssi_history)
 
-    # 💡 [핵심] 스트림릿 클라우드의 미국 시계를 버리고, 한국 시간(UTC+9) 강제 적용!
     now = datetime.utcnow() + timedelta(hours=9)
 
     def check_status(time_str, display_loc, rssi_val, trend_str):
@@ -79,11 +78,11 @@ def draw_ui(stand_data, sit_data):
                 clean_time_str = time_str.split(" GMT")[0].strip()
                 dt = datetime.strptime(clean_time_str, "%a %b %d %Y %H:%M:%S")
             
-            pretty_time = dt.strftime("%Y-%m-%d %H:%M:%S")
+            # 💡 [핵심 수정] 대문자 %Y(2026)를 소문자 %y(26)로 변경하여 깔끔한 형식으로 출력!
+            pretty_time = dt.strftime("%y-%m-%d %H:%M:%S")
             diff = (now - dt).total_seconds()
             
-            # 💡 [핵심] 90초(1분 30초) 동안 데이터 안 오면 즉각 빨간불로 전환!
-            if diff > 90:  
+            if diff > 180:  
                 try:
                     rssi_num = int(rssi_val)
                     if rssi_num > -75:
@@ -99,7 +98,7 @@ def draw_ui(stand_data, sit_data):
                 try:
                     rssi_num = int(rssi_val)
                     if rssi_num <= -65:
-                        return f"# ⚠️ **{display_loc} (신호약함)**\n> 🕒 실시간 갱신 중: `{pretty_time}`\n> 📉 전파 변화: {trend_str}"
+                        return f"# 🟢 **{display_loc}** <span style='font-size: 18px; font-weight: normal; color: #ff9900; vertical-align: middle;'>(⚠️신호약함)</span>\n> 🕒 실시간 갱신 중: `{pretty_time}`\n> 📉 전파 변화: {trend_str}"
                 except:
                     pass
                 
@@ -108,12 +107,13 @@ def draw_ui(stand_data, sit_data):
         except:
             return f"# ⚪ **{display_loc}**\n> ⏳ 시간 파악 중: `{time_str}`"
 
+    # 도화지(placeholder) 덮어쓰기 적용
     with placeholder.container():
         col1, col2 = st.columns(2)
         with col1:
-            st.markdown(f"### 🧍 입식 지게차\n{check_status(stand_time, stand_display, stand_rssi, stand_trend)}")
+            st.markdown(f"### 🧍 입식 지게차\n{check_status(stand_time, stand_display, stand_rssi, stand_trend)}", unsafe_allow_html=True)
         with col2:
-            st.markdown(f"### 💺 좌식 지게차\n{check_status(sit_time, sit_display, sit_rssi, sit_trend)}")
+            st.markdown(f"### 💺 좌식 지게차\n{check_status(sit_time, sit_display, sit_rssi, sit_trend)}", unsafe_allow_html=True)
 
 
 if os.path.exists(CACHE_FILE):
@@ -126,11 +126,12 @@ if os.path.exists(CACHE_FILE):
     except:
         pass 
 
-# 💡 [핵심] 구글이 봇(Bot)으로 차단하지 못하도록 'Session'을 열어 정상적인 브라우저처럼 위장합니다.
-session = requests.Session()
 headers = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+    'Cache-Control': 'no-cache, no-store, must-revalidate',
+    'Pragma': 'no-cache',
+    'Expires': '0',
+    'Connection': 'close' # 💡 연결 찌꺼기 방지 (3분 딜레이 해결용)
 }
 
 while True:
@@ -138,23 +139,21 @@ while True:
         success = False
         for attempt in range(3):
             try:
-                # 💡 [진짜 해결책] URL 문자열 자체에 시간을 강제로 박아넣어서, 구글이 튕겨낼 때도 끝까지 물고 가게 만듭니다!
+                # 💡 구글 캐시 부수기 + 딜레이 완벽 제거
                 nocache_url = f"{WEBAPP_URL}?dummy={int(time.time())}"
-                response = session.get(nocache_url, headers=headers, timeout=25)
+                response = requests.get(nocache_url, headers=headers, timeout=15)
                 response.raise_for_status() 
                 success = True
                 break  
             except requests.exceptions.RequestException:
                 time.sleep(3) 
                 
-        # 💡 [핵심] 404 에러나 지연이 생겨도 보기 싫은 텍스트를 띄우지 않고, 그냥 조용히 다음 턴으로 넘김
         if not success:
             time.sleep(7)
             continue
             
         data = response.text 
         
-        # 구글 서버 렉으로 인해 엉뚱한 HTML 에러 페이지가 날아왔을 때 튕기는 현상 완벽 방어
         if '|' not in data:
             time.sleep(7)
             continue
@@ -168,7 +167,6 @@ while True:
             saved_raw_data = data
             
     except Exception:
-        # 혹시 모를 내부 에러가 나도 화면을 멈추지 않고 계속 돌아가도록 조용히 패스(pass)
         pass
             
     time.sleep(7)
