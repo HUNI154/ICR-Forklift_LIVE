@@ -74,17 +74,17 @@ def draw_ui(stand_data, sit_data):
             if diff > 60:  
                 try:
                     rssi_num = int(rssi_val)
-                    # 와이파이 세기 -75
-                    if rssi_num > -75:
-                        reason = "💡 전원 OFF (정상 종료 추정)"
+                    if rssi_num > -85:
+                        reason = "🔌 전원 OFF (시동 꺼짐)"
                     else:
                         reason = "⚠️ 통신 사각지대 (음영지역 진입)"
                 except:
-                    reason = "🔌 통신 끊김"
+                    reason = "🔌 통신 끊김 (상태 불명)"
 
-                return f"# 🔴 **{display_loc}**\n### {reason}\n> 🕒 마지막 통신: `{pretty_time}`\n> 📉 전파 변화: `{trend_str}`"
+                # 💡 [여기 수정됨] 연구원님 의견대로 "⚠️ 마지막 확인" 으로 변경!
+                return f"# 🔴 **{display_loc}**\n### {reason}\n> ⚠️ 마지막 확인: `{pretty_time}`\n> 📉 전파 변화: `{trend_str}`"
             else:
-                return f"# 🟢 **{display_loc}**\n> 🕒 실시간 갱신 중: `{pretty_time}`\n> 📈 전파 변화: `{trend_str}`"
+                return f"# 🟢 **{display_loc}**\n> 🕒 실시간 갱신: `{pretty_time}`\n> 📈 전파 변화: `{trend_str}`"
         except:
             return f"# 🟡 **{display_loc}**\n> ⏳ 시간 형식 분석 중: `{time_str}`"
 
