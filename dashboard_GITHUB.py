@@ -82,7 +82,7 @@ def draw_ui(stand_data, sit_data):
             pretty_time = dt.strftime("%y-%m-%d %H:%M:%S")
             diff = (now - dt).total_seconds()
             
-            if diff > 180:  
+            if diff > 90:  
                 try:
                     rssi_num = int(rssi_val)
                     if rssi_num > -75:
