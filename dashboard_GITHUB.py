@@ -51,8 +51,19 @@ def draw_ui(stand_data, sit_data):
     st.session_state.stand_rssi_history = update_history(st.session_state.stand_rssi_history, stand_rssi)
     st.session_state.sit_rssi_history = update_history(st.session_state.sit_rssi_history, sit_rssi)
 
-    stand_trend = " ➔ ".join(st.session_state.stand_rssi_history) + " dBm" if st.session_state.stand_rssi_history else "측정 대기"
-    sit_trend = " ➔ ".join(st.session_state.sit_rssi_history) + " dBm" if st.session_state.sit_rssi_history else "측정 대기"
+    # 💡 [핵심 UX 개선] 최신 전파 값을 맨 앞으로 빼서 굵게 강조!
+    def format_trend(history):
+        if not history:
+            return "측정 대기"
+        if len(history) == 1:
+            return f"**{history[0]}** dBm"
+        
+        current = history[-1]
+        past = " ➔ ".join(history[:-1])
+        return f"**{current}** dBm (이전: {past})"
+
+    stand_trend = format_trend(st.session_state.stand_rssi_history)
+    sit_trend = format_trend(st.session_state.sit_rssi_history)
 
     # 💡 [핵심] 스트림릿 클라우드의 미국 시계를 버리고, 한국 시간(UTC+9) 강제 적용!
     now = datetime.utcnow() + timedelta(hours=9)
@@ -82,17 +93,17 @@ def draw_ui(stand_data, sit_data):
                 except:
                     reason = "🚨 통신 끊김"
 
-                return f"# 🔴 **{display_loc}**\n### {reason}\n> 🕒 마지막 통신: `{pretty_time}`\n> 📉 전파 변화: `{trend_str}`"
+                return f"# 🔴 **{display_loc}**\n### {reason}\n> 🕒 마지막 통신: `{pretty_time}`\n> 📉 전파 변화: {trend_str}"
             
             else:
                 try:
                     rssi_num = int(rssi_val)
                     if rssi_num <= -65:
-                        return f"# ⚠️ **{display_loc} (신호약함)**\n> 🕒 실시간 갱신 중: `{pretty_time}`\n> 📉 전파 변화: `{trend_str}`"
+                        return f"# ⚠️ **{display_loc} (신호약함)**\n> 🕒 실시간 갱신 중: `{pretty_time}`\n> 📉 전파 변화: {trend_str}"
                 except:
                     pass
                 
-                return f"# 🟢 **{display_loc}**\n> 🕒 실시간 갱신 중: `{pretty_time}`\n> 📈 전파 변화: `{trend_str}`"
+                return f"# 🟢 **{display_loc}**\n> 🕒 실시간 갱신 중: `{pretty_time}`\n> 📈 전파 변화: {trend_str}"
                 
         except:
             return f"# ⚪ **{display_loc}**\n> ⏳ 시간 파악 중: `{time_str}`"
