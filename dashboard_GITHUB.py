@@ -74,8 +74,8 @@ def draw_ui(stand_data, sit_data):
             if diff > 60:  
                 try:
                     rssi_num = int(rssi_val)
-                    # 💡 [여기 변경됨!] 연구원님의 실전 감각을 반영하여 기준을 -85로 확 낮췄습니다!
-                    if rssi_num > -85:
+                    # 와이파이 세기 -75
+                    if rssi_num > -75:
                         reason = "💡 전원 OFF (정상 종료 추정)"
                     else:
                         reason = "⚠️ 통신 사각지대 (음영지역 진입)"
