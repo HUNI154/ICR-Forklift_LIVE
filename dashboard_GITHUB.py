@@ -1,3 +1,43 @@
+import streamlit as st
+import requests
+import time
+import os
+from datetime import datetime
+
+WEBAPP_URL = "https://script.google.com/macros/s/AKfycbymDytZUmijx0gZhQBZpQU15Rf4V4YAA9o-hWTrVACsQyD_xgX_iYJ0nLm4Tgj592wy/exec"
+CACHE_FILE = "last_location.txt" 
+
+LOCATION_MAP = {
+    "ICR-AP-3F": "3층 신축동",
+    "ICR-AP-3F-2.4G-성능동": "3층 성능동",
+    "ICR-AP-2F-2.4": "2층 성능동",
+    "ICR EX 2F": "2층 신축동",
+    "ICR-AP-1F_2 2.4": "안전동",
+    "ICR-AP-1FA": "1층 신축동",
+    "ICR-AP-1F-2.4": "1층 성능동",
+}
+
+st.set_page_config(page_title="ICR 배터리시험센터 지게차 모니터링", layout="wide")
+st.markdown("## 🚜 ICR 배터리시험센터 지게차 실시간 위치")
+st.markdown("---")
+
+# 💡 과거 전파 수치를 5개까지 기억하는 뇌 장착
+if 'stand_rssi_history' not in st.session_state:
+    st.session_state.stand_rssi_history = []
+if 'sit_rssi_history' not in st.session_state:
+    st.session_state.sit_rssi_history = []
+
+def update_history(history_list, new_val):
+    if new_val and new_val != "-" and new_val != "None":
+        if not history_list or history_list[-1] != new_val:
+            history_list.append(new_val)
+        if len(history_list) > 5:
+            history_list.pop(0)
+    return history_list
+
+placeholder = st.empty()
+saved_raw_data = "대기중,대기중,-|대기중,대기중,-" 
+
 def draw_ui(stand_data, sit_data):
     # 1. 데이터 쪼개기
     try:
@@ -51,7 +91,7 @@ def draw_ui(stand_data, sit_data):
                 # 💡 [황금 비율 적용!] -65 이하일 때 미리 ⚠️ 경고 띄우기
                 try:
                     rssi_num = int(rssi_val)
-                    if rssi_num <= -65:  # 👈 여기를 -65로 수정!
+                    if rssi_num <= -65:
                         return f"# ⚠️ **{display_loc} (신호약함)**\n> 🕒 실시간 갱신 중: `{pretty_time}`\n> 📉 전파 변화: `{trend_str}`"
                 except:
                     pass
@@ -68,3 +108,48 @@ def draw_ui(stand_data, sit_data):
             st.markdown(f"### 🧍 입식 지게차\n{check_status(stand_time, stand_display, stand_rssi, stand_trend)}")
         with col2:
             st.markdown(f"### 💺 좌식 지게차\n{check_status(sit_time, sit_display, sit_rssi, sit_trend)}")
+
+if os.path.exists(CACHE_FILE):
+    try:
+        with open(CACHE_FILE, "r", encoding="utf-8") as f:
+            saved_raw_data = f.read()
+            if '|' in saved_raw_data:
+                sd, sid = saved_raw_data.split('|')
+                draw_ui(sd, sid) 
+    except:
+        pass 
+
+while True:
+    try:
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36'}
+        success = False
+        for attempt in range(2):
+            try:
+                # 💡 구글 캐시 무시하는 강력한 새로고침 주소
+                nocache_url = f"{WEBAPP_URL}?dummy={int(time.time())}"
+                response = requests.get(nocache_url, headers=headers, timeout=15)
+                response.raise_for_status() 
+                success = True
+                break  
+            except requests.exceptions.Timeout:
+                time.sleep(2) 
+                
+        if not success:
+            raise Exception("구글 서버 응답 지연")
+            
+        data = response.text 
+        
+        stand_data, sit_data = data.split('|')
+        draw_ui(stand_data, sit_data)
+        
+        if data != saved_raw_data:
+            with open(CACHE_FILE, "w", encoding="utf-8") as f:
+                f.write(data)
+            saved_raw_data = data
+            
+    except Exception as e:
+        # 🚨 [안전장치] 에러가 나면 하얀 화면 대신 왜 에러가 났는지 대시보드에 빨간 글로 띄워줍니다!
+        with placeholder.container():
+            st.error(f"🚨 통신 오류가 발생했습니다. (자동 재시도 중...)\n\n원인: {e}")
+            
+    time.sleep(7)
