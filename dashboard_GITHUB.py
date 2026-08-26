@@ -2,7 +2,6 @@ import streamlit as st
 import requests
 import time
 import os
-# 💡 [수정 1] 시간을 더하고 뺄 수 있는 timedelta 도구를 추가했습니다.
 from datetime import datetime, timedelta
 
 WEBAPP_URL = "https://script.google.com/macros/s/AKfycbymDytZUmijx0gZhQBZpQU15Rf4V4YAA9o-hWTrVACsQyD_xgX_iYJ0nLm4Tgj592wy/exec"
@@ -22,50 +21,81 @@ st.set_page_config(page_title="ICR 배터리시험센터 지게차 모니터링"
 st.markdown("## 🚜 ICR 배터리시험센터 지게차 실시간 위치")
 st.markdown("---")
 
+# 💡 1. 과거 전파 수치를 5개까지 기억하는 뇌 장착
+if 'stand_rssi_history' not in st.session_state:
+    st.session_state.stand_rssi_history = []
+if 'sit_rssi_history' not in st.session_state:
+    st.session_state.sit_rssi_history = []
+
+def update_history(history_list, new_val):
+    if new_val and new_val != "-" and new_val != "None":
+        if not history_list or history_list[-1] != new_val:
+            history_list.append(new_val)
+        if len(history_list) > 5:
+            history_list.pop(0)
+    return history_list
+
 placeholder = st.empty()
-saved_raw_data = "수신 대기 중...,위치 파악 중...|수신 대기 중...,위치 파악 중..."
+# 초기값: 이제 데이터가 3개씩(시간,위치,전파) 옵니다.
+saved_raw_data = "수신 대기 중...,위치 파악 중...,-|수신 대기 중...,위치 파악 중...,-" 
 
 def draw_ui(stand_data, sit_data):
+    # 💡 2. 데이터 3등분 쪼개기 (시간, 위치, 전파)
     try:
-        stand_time, stand_raw = stand_data.split(',', 1)
-        sit_time, sit_raw = sit_data.split(',', 1)
+        stand_time, stand_raw, stand_rssi = stand_data.split(',', 2)
+        sit_time, sit_raw, sit_rssi = sit_data.split(',', 2)
     except:
-        stand_time, stand_raw, sit_time, sit_raw = "알수없음", "알수없음", "알수없음", "알수없음"
+        stand_time, stand_raw, stand_rssi = "알수없음", "알수없음", "-"
+        sit_time, sit_raw, sit_rssi = "알수없음", "알수없음", "-"
         
     stand_display = LOCATION_MAP.get(stand_raw, stand_raw)
     sit_display = LOCATION_MAP.get(sit_raw, sit_raw)
 
-    # 💡 [수정 2] 미국에 있는 서버 시간(UTC)에 9시간을 더해서 완벽한 한국 시간(KST)으로 만듭니다!
+    # 💡 3. 메모리에 최신 전파 업데이트 및 추세선 텍스트 만들기
+    st.session_state.stand_rssi_history = update_history(st.session_state.stand_rssi_history, stand_rssi)
+    st.session_state.sit_rssi_history = update_history(st.session_state.sit_rssi_history, sit_rssi)
+
+    stand_trend = " ➔ ".join(st.session_state.stand_rssi_history) + " dBm" if st.session_state.stand_rssi_history else "측정 대기"
+    sit_trend = " ➔ ".join(st.session_state.sit_rssi_history) + " dBm" if st.session_state.sit_rssi_history else "측정 대기"
+
+    # 연구원님의 완벽한 한국 시간 패치 유지!
     now = datetime.utcnow() + timedelta(hours=9)
 
-    # 구글의 복잡한 시간을 예쁜 형식(YYYY-MM-DD)으로 바꾸는 기능
-    def check_status(time_str, display_loc):
+    # 💡 4. 상태 및 시간 체크 로직 (완전체 버전)
+    def check_status(time_str, display_loc, rssi_val, trend_str):
+        if "대기 중" in time_str or "알수없음" in time_str:
+            return f"# 🟡 **{display_loc}**\n> ⏳ 데이터 수신 대기 중..."
+
         try:
-            # 1. " GMT" 글자를 기준으로 앞부분(알맹이 시간)만 잘라냅니다.
-            clean_time_str = time_str.split(" GMT")[0].strip()
-            
-            # 2. 영문 요일/월 형식(%a %b %d %Y %H:%M:%S)을 파이썬 시간으로 번역합니다.
-            dt = datetime.strptime(clean_time_str, "%a %b %d %Y %H:%M:%S")
-            
-            # 3. 화면에 보여줄 예쁜 한국식 디자인으로 포장합니다. (예: 2026-08-24 16:21:08)
+            # 새로 바뀐 구글 서버는 "2026-08-26 14:30:00" 처럼 예쁘게 보내주므로 복잡한 텍스트 자르기 불필요!
+            dt = datetime.strptime(time_str, "%Y-%m-%d %H:%M:%S")
             pretty_time = dt.strftime("%Y-%m-%d %H:%M:%S")
             
-            # 4. 현재 시간과 비교 (120초 이상 차이나면 전원 꺼짐으로 판단)
             diff = (now - dt).total_seconds()
             
             if diff > 60:  
-                return f"# 🔴 **{display_loc}**\n### 🔌 통신 끊김 (전원 꺼짐)\n> ⚠️ 마지막 확인: `{pretty_time}`"
+                # 🤖 대시보드 자동 추론 로직 (전원 OFF vs 사각지대)
+                try:
+                    rssi_num = int(rssi_val)
+                    if rssi_num > -75:
+                        reason = "💡 전원 OFF (정상 종료 추정)"
+                    else:
+                        reason = "⚠️ 통신 사각지대 (음영지역 진입)"
+                except:
+                    reason = "🔌 통신 끊김"
+
+                return f"# 🔴 **{display_loc}**\n### {reason}\n> 🕒 마지막 통신: `{pretty_time}`\n> 📉 전파 변화: `{trend_str}`"
             else:
-                return f"# 🟢 **{display_loc}**\n> 🕒 실시간 갱신 중: `{pretty_time}`"
+                return f"# 🟢 **{display_loc}**\n> 🕒 실시간 갱신 중: `{pretty_time}`\n> 📈 전파 변화: `{trend_str}`"
         except:
-            return f"# 🟡 **{display_loc}**\n> ⏳ 시간 파악 중: `{time_str}`"
+            return f"# 🟡 **{display_loc}**\n> ⏳ 시간 형식 분석 중: `{time_str}`"
 
     with placeholder.container():
         col1, col2 = st.columns(2)
         with col1:
-            st.markdown(f"### 🧍 입식 지게차\n{check_status(stand_time, stand_display)}")
+            st.markdown(f"### 🧍 입식 지게차\n{check_status(stand_time, stand_display, stand_rssi, stand_trend)}")
         with col2:
-            st.markdown(f"### 💺 좌식 지게차\n{check_status(sit_time, sit_display)}")
+            st.markdown(f"### 💺 좌식 지게차\n{check_status(sit_time, sit_display, sit_rssi, sit_trend)}")
 
 if os.path.exists(CACHE_FILE):
     try:
