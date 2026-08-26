@@ -138,8 +138,9 @@ while True:
         success = False
         for attempt in range(3):
             try:
-                # 파라미터를 URL 뒤에 붙이지 않고 session.get 내부에 안전하게 담아서 보냄
-                response = session.get(WEBAPP_URL, params={'dummy': int(time.time())}, headers=headers, timeout=25)
+                # 💡 [진짜 해결책] URL 문자열 자체에 시간을 강제로 박아넣어서, 구글이 튕겨낼 때도 끝까지 물고 가게 만듭니다!
+                nocache_url = f"{WEBAPP_URL}?dummy={int(time.time())}"
+                response = session.get(nocache_url, headers=headers, timeout=25)
                 response.raise_for_status() 
                 success = True
                 break  
