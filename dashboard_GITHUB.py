@@ -21,7 +21,6 @@ st.set_page_config(page_title="ICR 배터리시험센터 지게차 모니터링"
 st.markdown("## 🚜 ICR 배터리시험센터 지게차 실시간 위치")
 st.markdown("---")
 
-# 💡 1. 과거 전파 수치를 5개까지 기억하는 뇌 장착
 if 'stand_rssi_history' not in st.session_state:
     st.session_state.stand_rssi_history = []
 if 'sit_rssi_history' not in st.session_state:
@@ -36,11 +35,9 @@ def update_history(history_list, new_val):
     return history_list
 
 placeholder = st.empty()
-# 초기값: 이제 데이터가 3개씩(시간,위치,전파) 옵니다.
 saved_raw_data = "수신 대기 중...,위치 파악 중...,-|수신 대기 중...,위치 파악 중...,-" 
 
 def draw_ui(stand_data, sit_data):
-    # 💡 2. 데이터 3등분 쪼개기 (시간, 위치, 전파)
     try:
         stand_time, stand_raw, stand_rssi = stand_data.split(',', 2)
         sit_time, sit_raw, sit_rssi = sit_data.split(',', 2)
@@ -51,30 +48,32 @@ def draw_ui(stand_data, sit_data):
     stand_display = LOCATION_MAP.get(stand_raw, stand_raw)
     sit_display = LOCATION_MAP.get(sit_raw, sit_raw)
 
-    # 💡 3. 메모리에 최신 전파 업데이트 및 추세선 텍스트 만들기
     st.session_state.stand_rssi_history = update_history(st.session_state.stand_rssi_history, stand_rssi)
     st.session_state.sit_rssi_history = update_history(st.session_state.sit_rssi_history, sit_rssi)
 
     stand_trend = " ➔ ".join(st.session_state.stand_rssi_history) + " dBm" if st.session_state.stand_rssi_history else "측정 대기"
     sit_trend = " ➔ ".join(st.session_state.sit_rssi_history) + " dBm" if st.session_state.sit_rssi_history else "측정 대기"
 
-    # 연구원님의 완벽한 한국 시간 패치 유지!
     now = datetime.utcnow() + timedelta(hours=9)
 
-    # 💡 4. 상태 및 시간 체크 로직 (완전체 버전)
     def check_status(time_str, display_loc, rssi_val, trend_str):
         if "대기 중" in time_str or "알수없음" in time_str:
             return f"# 🟡 **{display_loc}**\n> ⏳ 데이터 수신 대기 중..."
 
         try:
-            # 새로 바뀐 구글 서버는 "2026-08-26 14:30:00" 처럼 예쁘게 보내주므로 복잡한 텍스트 자르기 불필요!
-            dt = datetime.strptime(time_str, "%Y-%m-%d %H:%M:%S")
-            pretty_time = dt.strftime("%Y-%m-%d %H:%M:%S")
+            # 💡 [문제 해결 부분] 구글이 던지는 복잡한 GMT 영어를 파이썬이 해독합니다!
+            if "GMT" in time_str:
+                clean_time_str = time_str.split(" GMT")[0].strip()
+                dt = datetime.strptime(clean_time_str, "%a %b %d %Y %H:%M:%S")
+            else:
+                dt = datetime.strptime(time_str.strip(), "%Y-%m-%d %H:%M:%S")
+            
+            # 💡 [디자인 적용] 연구원님이 원하셨던 정확한 디자인 (26년 8월26일 10:07:20) 적용
+            pretty_time = f"{dt.strftime('%y')}년 {dt.month}월{dt.day}일 {dt.strftime('%H:%M:%S')}"
             
             diff = (now - dt).total_seconds()
             
             if diff > 60:  
-                # 🤖 대시보드 자동 추론 로직 (전원 OFF vs 사각지대)
                 try:
                     rssi_num = int(rssi_val)
                     if rssi_num > -75:
