@@ -61,14 +61,12 @@ def draw_ui(stand_data, sit_data):
             return f"# 🟡 **{display_loc}**\n> ⏳ 데이터 수신 대기 중..."
 
         try:
-            # 💡 [문제 해결 부분] 구글이 던지는 복잡한 GMT 영어를 파이썬이 해독합니다!
             if "GMT" in time_str:
                 clean_time_str = time_str.split(" GMT")[0].strip()
                 dt = datetime.strptime(clean_time_str, "%a %b %d %Y %H:%M:%S")
             else:
                 dt = datetime.strptime(time_str.strip(), "%Y-%m-%d %H:%M:%S")
             
-            # 💡 [디자인 적용] 연구원님이 원하셨던 정확한 디자인 (26년 8월26일 10:07:20) 적용
             pretty_time = f"{dt.strftime('%y')}년 {dt.month}월{dt.day}일 {dt.strftime('%H:%M:%S')}"
             
             diff = (now - dt).total_seconds()
@@ -76,7 +74,8 @@ def draw_ui(stand_data, sit_data):
             if diff > 60:  
                 try:
                     rssi_num = int(rssi_val)
-                    if rssi_num > -75:
+                    # 💡 [여기 변경됨!] 연구원님의 실전 감각을 반영하여 기준을 -85로 확 낮췄습니다!
+                    if rssi_num > -85:
                         reason = "💡 전원 OFF (정상 종료 추정)"
                     else:
                         reason = "⚠️ 통신 사각지대 (음영지역 진입)"
