@@ -39,7 +39,7 @@ def draw_ui(stand_data, sit_data):
                 try:
                     rssi_num = int(rssi_val)
                     if rssi_num > -75:
-                        reason = "💡 전원 OFF (정상 종료 추정)"
+                        reason = "💡 전원 OFF (시동 꺼짐 추정)"
                     else:
                         reason = "📡 통신 사각지대 (음영지역 진입)"
                 except:
