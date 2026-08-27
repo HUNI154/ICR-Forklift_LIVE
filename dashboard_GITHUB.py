@@ -59,7 +59,9 @@ def draw_ui(stand_data, sit_data):
             return f"**{history[0]}** dBm"
         
         current = history[-1]
-        past = " ➔ ".join(history[:-1])
+        # 💡 [수정 완료] 과거 기록을 최신순(역순)으로 정렬!
+        past_reversed = history[:-1][::-1]
+        past = " ➔ ".join(past_reversed)
         return f"**{current}** dBm (이전: {past})"
 
     stand_trend = format_trend(st.session_state.stand_rssi_history)
@@ -78,7 +80,6 @@ def draw_ui(stand_data, sit_data):
                 clean_time_str = time_str.split(" GMT")[0].strip()
                 dt = datetime.strptime(clean_time_str, "%a %b %d %Y %H:%M:%S")
             
-            # 💡 [핵심 수정] 대문자 %Y(2026)를 소문자 %y(26)로 변경하여 깔끔한 형식으로 출력!
             pretty_time = dt.strftime("%y-%m-%d %H:%M:%S")
             diff = (now - dt).total_seconds()
             
@@ -131,7 +132,7 @@ headers = {
     'Cache-Control': 'no-cache, no-store, must-revalidate',
     'Pragma': 'no-cache',
     'Expires': '0',
-    'Connection': 'close' # 💡 연결 찌꺼기 방지 (3분 딜레이 해결용)
+    'Connection': 'close' 
 }
 
 while True:
@@ -139,7 +140,6 @@ while True:
         success = False
         for attempt in range(3):
             try:
-                # 💡 구글 캐시 부수기 + 딜레이 완벽 제거
                 nocache_url = f"{WEBAPP_URL}?dummy={int(time.time())}"
                 response = requests.get(nocache_url, headers=headers, timeout=15)
                 response.raise_for_status() 
