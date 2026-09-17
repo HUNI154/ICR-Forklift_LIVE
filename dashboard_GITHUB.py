@@ -50,7 +50,7 @@ def update_history(history_list, new_val):
             history_list.pop(0)
     return history_list
 
-@st.fragment(run_every=5)
+@st.fragment(run_every=10)
 def render_monitor():
     saved_raw_data = "대기중,대기중,-|대기중,대기중,-"
     if os.path.exists(CACHE_FILE):
