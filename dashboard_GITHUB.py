@@ -1,6 +1,5 @@
 import streamlit as st
 import requests
-import time
 import os
 from datetime import datetime, timedelta
 
@@ -34,11 +33,44 @@ def update_history(history_list, new_val):
             history_list.pop(0)
     return history_list
 
-# 💡 화면 깜빡임(블러) 방지 도화지
-placeholder = st.empty()
-saved_raw_data = "대기중,대기중,-|대기중,대기중,-" 
+# 💡 st.fragment를 사용하여 5초 주기로 해당 영역만 자동 갱신 (while 루프 대체)
+@st.fragment(run_every=5)
+def render_monitor():
+    saved_raw_data = "대기중,대기중,-|대기중,대기중,-"
+    if os.path.exists(CACHE_FILE):
+        try:
+            with open(CACHE_FILE, "r", encoding="utf-8") as f:
+                saved_raw_data = f.read()
+        except:
+            pass
 
-def draw_ui(stand_data, sit_data):
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0',
+    }
+
+    # 데이터 가져오기 (타임아웃을 5초로 줄여 병목 현상 방지)
+    data = saved_raw_data
+    try:
+        nocache_url = f"{WEBAPP_URL}?dummy={int(datetime.now().timestamp())}"
+        response = requests.get(nocache_url, headers=headers, timeout=5)
+        response.raise_for_status()
+        fetched_text = response.text.strip()
+        if '|' in fetched_text:
+            data = fetched_text
+            if data != saved_raw_data:
+                with open(CACHE_FILE, "w", encoding="utf-8") as f:
+                    f.write(data)
+    except Exception:
+        pass
+
+    try:
+        stand_data, sit_data = data.split('|', 1)
+    except:
+        stand_data, sit_data = "대기중,대기중,-", "대기중,대기중,-"
+
     try:
         stand_time, stand_raw, stand_rssi = stand_data.split(',', 2)
         sit_time, sit_raw, sit_rssi = sit_data.split(',', 2)
@@ -59,7 +91,6 @@ def draw_ui(stand_data, sit_data):
             return f"**{history[0]}** dBm"
         
         current = history[-1]
-        # 💡 [수정 완료] 과거 기록을 최신순(역순)으로 정렬!
         past_reversed = history[:-1][::-1]
         past = " ➔ ".join(past_reversed)
         return f"**{current}** dBm (이전: {past})"
@@ -70,7 +101,7 @@ def draw_ui(stand_data, sit_data):
     now = datetime.utcnow() + timedelta(hours=9)
 
     def check_status(time_str, display_loc, rssi_val, trend_str):
-        if time_str == "대기중" or time_str == "알수없음":
+        if time_str in ["대기중", "알수없음"]:
             return f"# ⚪ **{display_loc}**\n> ⏳ 데이터 수신 대기 중..."
 
         try:
@@ -86,15 +117,10 @@ def draw_ui(stand_data, sit_data):
             if diff > 90:  
                 try:
                     rssi_num = int(rssi_val)
-                    if rssi_num > -75:
-                        reason = "🔌 전원 OFF (시동 꺼짐 추정)"
-                    else:
-                        reason = "📡 통신 사각지대 (음영지역 진입)"
+                    reason = "🔌 전원 OFF (시동 꺼짐 추정)" if rssi_num > -75 else "📡 통신 사각지대 (음영지역 진입)"
                 except:
                     reason = "🚨 통신 끊김"
-
                 return f"# 🔴 **{display_loc}**\n### {reason}\n> 🕒 마지막 통신: `{pretty_time}`\n> 📉 전파 변화: {trend_str}"
-            
             else:
                 try:
                     rssi_num = int(rssi_val)
@@ -102,71 +128,16 @@ def draw_ui(stand_data, sit_data):
                         return f"# 🟢 **{display_loc}** <span style='font-size: 18px; font-weight: normal; color: #ff9900; vertical-align: middle;'>(⚠️신호약함)</span>\n> 🕒 실시간 갱신 중: `{pretty_time}`\n> 📉 전파 변화: {trend_str}"
                 except:
                     pass
-                
-                return f"# 🟢 **{display_loc}**\n> 🕒 실시간 갱신 중: `{pretty_time}`\n> 📈 전파 변화: {trend_str}"
-                
+                return f"# 🟢 **{display_loc}**\n> 🕒 실시간 갱신 중: `{pretty_time}`\n> 📉 전파 변화: {trend_str}"
         except:
             return f"# ⚪ **{display_loc}**\n> ⏳ 시간 파악 중: `{time_str}`"
 
-    # 도화지(placeholder) 덮어쓰기 적용
-    with placeholder.container():
-        col1, col2 = st.columns(2)
-        with col1:
-            st.markdown(f"### 🧍 입식 지게차\n{check_status(stand_time, stand_display, stand_rssi, stand_trend)}", unsafe_allow_html=True)
-        with col2:
-            st.markdown(f"### 💺 좌식 지게차\n{check_status(sit_time, sit_display, sit_rssi, sit_trend)}", unsafe_allow_html=True)
+    # 화면 출력
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown(f"### 🧍 입식 지게차\n{check_status(stand_time, stand_display, stand_rssi, stand_trend)}", unsafe_allow_html=True)
+    with col2:
+        st.markdown(f"### 💺 좌식 지게차\n{check_status(sit_time, sit_display, sit_rssi, sit_trend)}", unsafe_allow_html=True)
 
-
-if os.path.exists(CACHE_FILE):
-    try:
-        with open(CACHE_FILE, "r", encoding="utf-8") as f:
-            saved_raw_data = f.read()
-            if '|' in saved_raw_data:
-                sd, sid = saved_raw_data.split('|')
-                draw_ui(sd, sid) 
-    except:
-        pass 
-
-headers = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-    'Cache-Control': 'no-cache, no-store, must-revalidate',
-    'Pragma': 'no-cache',
-    'Expires': '0',
-    'Connection': 'close' 
-}
-
-while True:
-    try:
-        success = False
-        for attempt in range(3):
-            try:
-                nocache_url = f"{WEBAPP_URL}?dummy={int(time.time())}"
-                response = requests.get(nocache_url, headers=headers, timeout=15)
-                response.raise_for_status() 
-                success = True
-                break  
-            except requests.exceptions.RequestException:
-                time.sleep(3) 
-                
-        if not success:
-            time.sleep(7)
-            continue
-            
-        data = response.text 
-        
-        if '|' not in data:
-            time.sleep(7)
-            continue
-
-        stand_data, sit_data = data.split('|', 1)
-        draw_ui(stand_data, sit_data)
-        
-        if data != saved_raw_data:
-            with open(CACHE_FILE, "w", encoding="utf-8") as f:
-                f.write(data)
-            saved_raw_data = data
-            
-    except Exception:
-        pass
-            
-    time.sleep(7)
+# 모니터링 영역 실행
+render_monitor()
