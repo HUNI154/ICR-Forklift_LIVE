@@ -17,6 +17,23 @@ LOCATION_MAP = {
 }
 
 st.set_page_config(page_title="ICR 배터리시험센터 지게차 모니터링", layout="wide")
+
+# 🌟 [핵심] 프래그먼트 재실행 시 발생하는 블러/투명도 애니메이션 제거 CSS
+st.markdown("""
+    <style>
+    /* Streamlit Fragment 재갱신 시 투명도/블러 효과 차단 */
+    [data-testid="stFragment"] {
+        opacity: 1 !important;
+        filter: none !important;
+        transition: none !important;
+    }
+    div[data-testid="stElementContainer"] {
+        opacity: 1 !important;
+        filter: none !important;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
 st.markdown("## 🚜 ICR 배터리시험센터 지게차 실시간 위치")
 st.markdown("---")
 
@@ -33,7 +50,6 @@ def update_history(history_list, new_val):
             history_list.pop(0)
     return history_list
 
-# 💡 st.fragment를 사용하여 5초 주기로 해당 영역만 자동 갱신 (while 루프 대체)
 @st.fragment(run_every=5)
 def render_monitor():
     saved_raw_data = "대기중,대기중,-|대기중,대기중,-"
@@ -51,7 +67,6 @@ def render_monitor():
         'Expires': '0',
     }
 
-    # 데이터 가져오기 (타임아웃을 5초로 줄여 병목 현상 방지)
     data = saved_raw_data
     try:
         nocache_url = f"{WEBAPP_URL}?dummy={int(datetime.now().timestamp())}"
@@ -89,7 +104,7 @@ def render_monitor():
             return "측정 대기"
         if len(history) == 1:
             return f"**{history[0]}** dBm"
-        
+
         current = history[-1]
         past_reversed = history[:-1][::-1]
         past = " ➔ ".join(past_reversed)
@@ -110,10 +125,10 @@ def render_monitor():
             except:
                 clean_time_str = time_str.split(" GMT")[0].strip()
                 dt = datetime.strptime(clean_time_str, "%a %b %d %Y %H:%M:%S")
-            
+
             pretty_time = dt.strftime("%y-%m-%d %H:%M:%S")
             diff = (now - dt).total_seconds()
-            
+
             if diff > 90:  
                 try:
                     rssi_num = int(rssi_val)
@@ -132,12 +147,10 @@ def render_monitor():
         except:
             return f"# ⚪ **{display_loc}**\n> ⏳ 시간 파악 중: `{time_str}`"
 
-    # 화면 출력
     col1, col2 = st.columns(2)
     with col1:
         st.markdown(f"### 🧍 입식 지게차\n{check_status(stand_time, stand_display, stand_rssi, stand_trend)}", unsafe_allow_html=True)
     with col2:
         st.markdown(f"### 💺 좌식 지게차\n{check_status(sit_time, sit_display, sit_rssi, sit_trend)}", unsafe_allow_html=True)
 
-# 모니터링 영역 실행
 render_monitor()
